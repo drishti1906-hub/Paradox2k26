@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap');
+@import url('https://fonts.cdnfonts.com/css/vcr-osd-mono');
+
+@import "tailwindcss";
+
+@theme {
+  --color-paradox-black: #050505;
+  --color-paradox-dark: #0d0d12;
+  --color-paradox-purple: #7c3aed;
+  --color-paradox-purple-dark: #4c1d95;
+  --color-paradox-aqua: #22d3ee;
+  --color-paradox-lime: #a3e635;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: '"Fira Code"', monospace;
+
+  --shadow-neon-purple: 0 0 10px rgba(124, 58, 237, 0.7), 0 0 20px rgba(124, 58, 237, 0.5);
+  --shadow-neon-aqua: 0 0 10px rgba(34, 211, 238, 0.7), 0 0 20px rgba(34, 211, 238, 0.5);
+  --shadow-neon-lime: 0 0 10px rgba(163, 230, 53, 0.7), 0 0 20px rgba(163, 230, 53, 0.5);
+
+  --background-image-space-gradient: radial-gradient(circle at center, #1e1b4b 0%, #050505 100%);
+}
+
+@layer base {
+  body {
+    @apply bg-paradox-black text-white font-sans antialiased overflow-hidden m-0 p-0;
+  }
+}
+
+.glass {
+  @apply bg-black/40 backdrop-blur-xl border border-white/10;
+}
+
+.bento-box {
+  @apply bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.5); 
+}
+::-webkit-scrollbar-thumb {
+  background: #7c3aed; 
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a3e635; 
+}
