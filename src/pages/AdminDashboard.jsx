@@ -255,6 +255,7 @@ export default function AdminDashboard({ onExit }) {
             await callAdminRpc('admin_update_game_state', {
                 p_is_live: true,
                 p_timer_running: false,
+                p_timer_remaining: 1800,
                 p_current_round: gameState.current_round || 1,
                 p_phase: 'MISSION',
                 p_game_status: 'RUNNING',
@@ -619,7 +620,13 @@ export default function AdminDashboard({ onExit }) {
                             color="red"
                         />
                         <ControlButton icon={<Play />} label="START GAME" onClick={startGame} disabled={actionLoading || gameState.is_live} color="green" />
-                        <ControlButton icon={gameState.round_table_open ? <Unlock /> : <Lock />} label={gameState.round_table_open ? 'CLOSE ROUND TABLE' : 'OPEN ROUND TABLE'} onClick={toggleRoundTable} disabled={actionLoading || !gameState.is_live} color="purple" />
+                        <ControlButton 
+                            icon={gameState.round_table_open ? <Unlock /> : <Lock />} 
+                            label={gameState.round_table_open ? 'CLOSE ROUND TABLE' : 'OPEN ROUND TABLE'} 
+                            onClick={toggleRoundTable} 
+                            disabled={actionLoading || !gameState.is_live || (!gameState.round_table_open && (liveSeconds > 0 || gameState.timer_running))} 
+                            color="purple" 
+                        />
                         <ControlButton icon={gameState.voting_locked ? <Unlock /> : <Lock />} label={gameState.voting_locked ? 'UNLOCK VOTING' : 'LOCK VOTING'} onClick={toggleVoting} disabled={actionLoading || !gameState.round_table_open} color="purple" />
                         <ControlButton icon={<Vote />} label="REVEAL VOTES" onClick={revealVotes} disabled={actionLoading || gameState.votes_revealed || gameState.voting_locked} color="yellow" />
                         <ControlButton icon={<Square />} label="END GAME" onClick={endGame} disabled={actionLoading || !gameState.is_live} color="red" />
