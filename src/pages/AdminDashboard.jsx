@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import {
@@ -341,34 +341,100 @@ export default function AdminDashboard({ onExit }) {
         } catch { }
     };
 
-    const displayedSeconds = useMemo(() => {
-        if (!gameState.timer_running || !gameState.timer_started_at) {
-            return Math.max(0, Number(gameState.timer_remaining) || 0);
+    const [liveSeconds, setLiveSeconds] = useState(0);
+    useEffect(() => {
+        const updateTimer = () => {
+            const base = Math.max(
+                0,
+                Number(gameState.timer_remaining) || 0
+            );
+
+            if (!gameState.timer_running || !gameState.timer_started_at) {
+                setLiveSeconds(base);
+                return;
+            }
+
+            const startedAt = new Date(
+                gameState.timer_started_at
+            ).getTime();
+
+            const elapsed = Math.floor(
+                (Date.now() - startedAt) / 1000
+            );
+
+            const remaining = Math.max(
+                0,
+                base - elapsed
+            );
+
+            setLiveSeconds(remaining);
+        };
+
+        updateTimer();
+
+        if (!gameState.timer_running) {
+            return;
         }
 
-        const startedAt = new Date(gameState.timer_started_at).getTime();
-        const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-        return Math.max(0, (Number(gameState.timer_remaining) || 0) - elapsed);
-    }, [gameState.timer_running, gameState.timer_started_at, gameState.timer_remaining]);
+        const interval = window.setInterval(updateTimer, 1000);
 
-    const [liveSeconds, setLiveSeconds] = useState(displayedSeconds);
-
-    useEffect(() => {
-        setLiveSeconds(displayedSeconds);
-        if (!gameState.timer_running) return undefined;
-
-        const interval = window.setInterval(() => {
-            const startedAt = new Date(gameState.timer_started_at).getTime();
-            const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-            const remaining = Math.max(0, (Number(gameState.timer_remaining) || 0) - elapsed);
-            setLiveSeconds(remaining);
-        }, 1000);
-
-        return () => window.clearInterval(interval);
-    }, [displayedSeconds, gameState.timer_running]);
+        return () => {
+            window.clearInterval(interval);
+        };
+    }, [
+        gameState.timer_running,
+        gameState.timer_started_at,
+        gameState.timer_remaining,
+    ]);
 
     const minutes = Math.floor(liveSeconds / 60).toString().padStart(2, '0');
     const seconds = (liveSeconds % 60).toString().padStart(2, '0');
+
+    const timerFinishedRef = useRef(false);
+
+    useEffect(() => {
+        // Timer is still running
+        if (!gameState.timer_running) {
+            timerFinishedRef.current = false;
+            return;
+        }
+
+        // Timer has not reached zero yet
+        if (liveSeconds > 0) {
+            return;
+        }
+
+        // Prevent duplicate RPC calls
+        if (timerFinishedRef.current) {
+            return;
+        }
+
+        timerFinishedRef.current = true;
+
+        const openRoundTableAutomatically = async () => {
+            try {
+                await callAdminRpc('admin_update_game_state', {
+                    p_timer_running: false,
+                    p_timer_remaining: 0,
+                    p_round_table_open: true,
+                    p_phase: 'ROUND_TABLE',
+                    p_voting_locked: true,
+                });
+
+                showSuccess('TIME UP — ROUND TABLE OPENED');
+            } catch (err) {
+                timerFinishedRef.current = false;
+                console.error('AUTO ROUND TABLE ERROR:', err);
+            }
+        };
+
+        openRoundTableAutomatically();
+    }, [
+        liveSeconds,
+        gameState.timer_running,
+        callAdminRpc,
+        showSuccess,
+    ]);
 
     const joinedTeams = teams.filter((team) => team.is_joined === true).length;
     const imposterCount = teams.filter(
@@ -526,19 +592,81 @@ export default function AdminDashboard({ onExit }) {
                 </section>
 
                 <section className="border border-purple-500/30 bg-black/30 p-6 mb-7">
-                    <div className="flex items-end justify-between mb-6">
+
+                    {/* HEADER */}
+                    <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-7">
                         <div>
-                            <div className="text-purple-400 text-sm tracking-[0.3em] font-bold">PARTICIPANTS</div>
-                            <h2 className="text-2xl font-black tracking-wider mt-1">TEAM STATUS</h2>
+                            <div className="text-purple-400 text-sm tracking-[0.3em] font-bold">
+                                PARTICIPANTS
+                            </div>
+
+                            <h2 className="text-2xl font-black tracking-wider mt-1">
+                                TEAM LOBBY
+                            </h2>
+
+                            <p className="text-white/35 text-sm mt-2 uppercase tracking-widest">
+                                Teams appear here as they join the game
+                            </p>
                         </div>
-                        <div className="text-white/40">{joinedTeams} / {TOTAL_TEAMS} JOINED</div>
+
+                        <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.9)]" />
+
+                            <span className="text-white font-black text-lg">
+                                {joinedTeams}
+                            </span>
+
+                            <span className="text-white/30">
+                                / {TOTAL_TEAMS}
+                            </span>
+
+                            <span className="text-white/40 uppercase tracking-widest text-xs">
+                                Joined
+                            </span>
+                        </div>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1250px]">
-                            <thead><tr className="border-b border-white/10 text-white/40 text-xs uppercase tracking-widest"><th className="text-left py-4 px-3">#</th><th className="text-left py-4 px-3">Team</th><th className="text-left py-4 px-3">Username</th><th className="text-left py-4 px-3">Joined</th><th className="text-left py-4 px-3">Status</th><th className="text-left py-4 px-3">Role</th><th className="text-right py-4 px-3">Score Control</th></tr></thead>
-                            <tbody>{Array.from({ length: TOTAL_TEAMS }, (_, index) => { const teamNumber = index + 1; const team = teams.find((t) => Number(t.team_number) === teamNumber); return <TeamRow key={teamNumber} teamNumber={teamNumber} team={team} />; })}</tbody>
-                        </table>
-                    </div>
+
+                    {/* JOINED TEAMS */}
+                    {joinedTeams === 0 ? (
+                        <div className="min-h-[260px] flex flex-col items-center justify-center border border-dashed border-white/10 bg-black/20">
+
+                            <Users
+                                size={48}
+                                className="text-white/15 mb-4"
+                            />
+
+                            <div className="text-white/40 uppercase tracking-[0.25em] font-bold">
+                                Waiting for teams...
+                            </div>
+
+                            <div className="text-white/20 text-xs uppercase tracking-widest mt-2">
+                                Teams will appear automatically when they join
+                            </div>
+
+                        </div>
+                    ) : (
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+
+                            {teams
+                                .filter((team) => team.is_joined === true)
+                                .sort(
+                                    (a, b) =>
+                                        Number(a.team_number) -
+                                        Number(b.team_number)
+                                )
+                                .map((team) => (
+
+                                    <JoinedTeamCard
+                                        key={team.id}
+                                        team={team}
+                                    />
+
+                                ))}
+
+                        </div>
+                    )}
+
                 </section>
 
                 <section className="border border-purple-500/30 bg-black/30 p-6 mb-10">
@@ -572,6 +700,107 @@ function ControlButton({ icon, label, onClick, disabled, color }) {
 
 function StateBox({ label, value }) {
     return <div className="border border-white/10 bg-black/30 p-5"><div className="text-xs tracking-widest text-white/35 uppercase">{label}</div><div className="mt-2 font-black text-lg text-purple-300 uppercase truncate">{value}</div></div>;
+}
+
+function JoinedTeamCard({ team }) {
+    const role = String(team?.role || '').toUpperCase();
+
+    const isImposter = role === 'IMPOSTER';
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className="group relative overflow-hidden border border-purple-500/30 bg-[#08050F] p-5 hover:border-purple-400/70 hover:bg-purple-950/20 transition-all"
+        >
+
+            {/* TOP GLOW */}
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-purple-500 opacity-60 group-hover:opacity-100 transition-opacity" />
+
+            {/* HEADER */}
+            <div className="flex items-center justify-between mb-5">
+
+                <div className="flex items-center gap-3">
+
+                    <div className="w-10 h-10 flex items-center justify-center border border-purple-500/30 bg-purple-950/30 text-purple-300 font-black">
+                        {String(team.team_number).padStart(2, '0')}
+                    </div>
+
+                    <div>
+                        <div className="text-xs text-white/30 uppercase tracking-widest">
+                            TEAM
+                        </div>
+
+                        <div className="font-black text-white">
+                            {team.team_name ||
+                                `TEAM ${String(team.team_number).padStart(2, '0')}`}
+                        </div>
+                    </div>
+
+                </div>
+
+                {/* ONLINE */}
+                <div className="flex items-center gap-2">
+
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.9)]" />
+
+                    <span className="text-[10px] text-green-400 font-bold uppercase tracking-widest">
+                        Connected
+                    </span>
+
+                </div>
+
+            </div>
+
+            {/* USERNAME */}
+            <div className="border border-white/5 bg-black/30 p-3 mb-4">
+
+                <div className="text-[9px] text-white/25 uppercase tracking-[0.2em] mb-1">
+                    PLAYER
+                </div>
+
+                <div className="text-sm text-white/80 font-bold truncate">
+                    {team.username || 'Unknown'}
+                </div>
+
+            </div>
+
+            {/* BOTTOM INFO */}
+            <div className="flex items-center justify-between">
+
+                <div>
+                    <div className="text-[9px] text-white/25 uppercase tracking-widest">
+                        SCORE
+                    </div>
+
+                    <div className="text-xl font-black text-purple-300">
+                        {team.score || 0}
+                    </div>
+                </div>
+
+                <div
+                    className={`flex items-center gap-2 px-3 py-2 border text-[10px] font-black tracking-widest ${isImposter
+                            ? 'border-red-500/40 bg-red-950/30 text-red-400'
+                            : 'border-green-500/30 bg-green-950/20 text-green-400'
+                        }`}
+                >
+                    {isImposter ? (
+                        <>
+                            <Shield size={13} />
+                            IMPOSTER
+                        </>
+                    ) : (
+                        <>
+                            <CheckCircle2 size={13} />
+                            INNOCENT
+                        </>
+                    )}
+                </div>
+            </div>
+
+        </motion.div>
+    );
 }
 
 function TeamRow({ teamNumber, team }) {

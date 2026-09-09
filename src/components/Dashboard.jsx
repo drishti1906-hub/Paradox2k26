@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import MissionScreen from './MissionScreen';
 import {
   DashboardNavbar,
   TeamIdentity,
@@ -34,6 +35,7 @@ export default function Dashboard({ team, teamName, onExit }) {
   const [scoreInput, setScoreInput] = useState('');
   const [savingScore, setSavingScore] = useState(false);
   const [message, setMessage] = useState('');
+  const [missionStarted, setMissionStarted] = useState(false);
 
   const isImposter = String(teamRecord?.role || team?.role || '').toUpperCase() === 'IMPOSTER';
   const displayTeam = teamRecord?.team_name || `TEAM ${String(teamNumber || '').padStart(2, '0')}`;
@@ -74,6 +76,14 @@ export default function Dashboard({ team, teamName, onExit }) {
 
   const liveSeconds = useLiveTimer(gameState);
   const formatTime = (value) => `${Math.floor(value / 60).toString().padStart(2, '0')}:${(value % 60).toString().padStart(2, '0')}`;
+  if (missionStarted) {
+    return (
+      <MissionScreen
+        onExit={() => setMissionStarted(false)}
+        timer={formatTime(liveSeconds)}
+      />
+    );
+  }
 
   const submitScore = async () => {
     const value = Number(scoreInput);
@@ -125,7 +135,9 @@ export default function Dashboard({ team, teamName, onExit }) {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[400px]">
-              <div className="lg:col-span-6"><MainMissionPanel onEnterMission={() => setMessage('MISSION READY')} /></div>
+              <div className="lg:col-span-6"><MainMissionPanel
+                onEnterMission={() => setMissionStarted(true)}
+              /></div>
               <div className="lg:col-span-3"><RoundTablePanel open={gameState.round_table_open} /></div>
               <div className="lg:col-span-3"><CrewStatus currentTeam={displayTeam} /></div>
             </div>
@@ -151,18 +163,57 @@ export default function Dashboard({ team, teamName, onExit }) {
 }
 
 function useLiveTimer(gameState) {
-  const calculate = () => {
-    const base = Math.max(0, Number(gameState.timer_remaining) || 0);
-    if (!gameState.timer_running || !gameState.timer_started_at) return base;
-    const elapsed = Math.floor((Date.now() - new Date(gameState.timer_started_at).getTime()) / 1000);
-    return Math.max(0, base - elapsed);
+  const calculateRemaining = () => {
+    const remaining = Math.max(
+      0,
+      Number(gameState.timer_remaining) || 0
+    );
+
+    if (
+      !gameState.timer_running ||
+      !gameState.timer_started_at
+    ) {
+      return remaining;
+    }
+
+    const startedAt = new Date(
+      gameState.timer_started_at
+    ).getTime();
+
+    if (!Number.isFinite(startedAt)) {
+      return remaining;
+    }
+
+    const elapsed = Math.floor(
+      (Date.now() - startedAt) / 1000
+    );
+
+    return Math.max(0, remaining - elapsed);
   };
-  const [seconds, setSeconds] = useState(calculate);
+
+  const [seconds, setSeconds] = useState(calculateRemaining);
+
   useEffect(() => {
-    setSeconds(calculate());
-    if (!gameState.timer_running) return undefined;
-    const id = window.setInterval(() => setSeconds(calculate()), 1000);
-    return () => window.clearInterval(id);
-  }, [gameState.timer_running, gameState.timer_started_at, gameState.timer_remaining]);
+    const update = () => {
+      setSeconds(calculateRemaining());
+    };
+
+    update();
+
+    if (!gameState.timer_running) {
+      return;
+    }
+
+    const interval = window.setInterval(update, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    gameState.timer_running,
+    gameState.timer_started_at,
+    gameState.timer_remaining,
+  ]);
+
   return seconds;
 }
