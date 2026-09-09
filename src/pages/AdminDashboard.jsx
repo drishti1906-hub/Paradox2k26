@@ -189,8 +189,19 @@ export default function AdminDashboard({ onExit }) {
                     schema: 'public',
                     table: 'teams',
                 },
-                () => {
-                    fetchTeams().catch(console.error);
+                (payload) => {
+                    setTeams(current => {
+                        if (payload.eventType === 'INSERT') {
+                            const exists = current.find(t => t.id === payload.new.id);
+                            if (exists) return current;
+                            return [...current, payload.new];
+                        } else if (payload.eventType === 'UPDATE') {
+                            return current.map(t => t.id === payload.new.id ? { ...t, ...payload.new } : t);
+                        } else if (payload.eventType === 'DELETE') {
+                            return current.filter(t => t.id !== payload.old.id);
+                        }
+                        return current;
+                    });
                 }
             )
             .subscribe();
@@ -268,6 +279,51 @@ export default function AdminDashboard({ onExit }) {
             });
             showSuccess('GAME ENDED');
         } catch { }
+    };
+
+    const imposterMissionCompleted = async () => {
+        if (actionLoading) return;
+
+        const confirmed = window.confirm(
+            'The Imposter has completed the mission.\n\n' +
+            'Every Innocent team will lose 1 point.\n\n' +
+            'Continue?'
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setActionLoading(true);
+            setError('');
+
+            const { data, error: rpcError } = await supabase.rpc(
+                'admin_imposter_mission_completed'
+            );
+
+            if (rpcError) throw rpcError;
+
+            console.log('IMPOSTER MISSION RESULT:', data);
+
+            await fetchTeams();
+
+            showSuccess(
+                'IMPOSTER MISSION COMPLETE — INNOCENT TEAMS -1'
+            );
+
+        } catch (err) {
+            console.error(
+                'IMPOSTER MISSION SCORING ERROR:',
+                err
+            );
+
+            showError(
+                err.message ||
+                'Failed to update mission score.'
+            );
+
+        } finally {
+            setActionLoading(false);
+        }
     };
 
     const startTimer = async () => {
@@ -443,9 +499,11 @@ export default function AdminDashboard({ onExit }) {
     const innocentCount = teams.filter(
         (team) => String(team.role || '').toUpperCase() !== 'IMPOSTER' && team.role
     ).length;
-    const sortedLeaderboard = [...teams].sort(
-        (a, b) => Number(b.score || 0) - Number(a.score || 0)
-    );
+    const sortedLeaderboard = [...teams].sort((a, b) => {
+        const scoreDiff = Number(b.score || 0) - Number(a.score || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return Number(a.team_number || 0) - Number(b.team_number || 0);
+    });
 
     const refreshDashboard = async () => {
         try {
@@ -483,7 +541,7 @@ export default function AdminDashboard({ onExit }) {
     }
 
     return (
-        <div className="min-h-screen bg-[#030107] text-white font-sans overflow-y-auto">
+        <div className="h-screen bg-[#030107] text-white font-sans overflow-y-auto relative">
             <div
                 className="fixed inset-0 pointer-events-none opacity-30"
                 style={{
@@ -549,7 +607,17 @@ export default function AdminDashboard({ onExit }) {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
+                        <ControlButton
+                            icon={<Shield />}
+                            label="IMPOSTER COMPLETED"
+                            onClick={imposterMissionCompleted}
+                            disabled={
+                                actionLoading ||
+                                !gameState.is_live
+                            }
+                            color="red"
+                        />
                         <ControlButton icon={<Play />} label="START GAME" onClick={startGame} disabled={actionLoading || gameState.is_live} color="green" />
                         <ControlButton icon={gameState.round_table_open ? <Unlock /> : <Lock />} label={gameState.round_table_open ? 'CLOSE ROUND TABLE' : 'OPEN ROUND TABLE'} onClick={toggleRoundTable} disabled={actionLoading || !gameState.is_live} color="purple" />
                         <ControlButton icon={gameState.voting_locked ? <Unlock /> : <Lock />} label={gameState.voting_locked ? 'UNLOCK VOTING' : 'LOCK VOTING'} onClick={toggleVoting} disabled={actionLoading || !gameState.round_table_open} color="purple" />
@@ -671,16 +739,66 @@ export default function AdminDashboard({ onExit }) {
 
                 <section className="border border-purple-500/30 bg-black/30 p-6 mb-10">
                     <div className="text-purple-400 text-sm tracking-[0.3em] font-bold">PERFORMANCE</div>
-                    <h2 className="text-2xl font-black tracking-wider mt-1 mb-6">LEADERBOARD</h2>
-                    <div className="space-y-2">
-                        {sortedLeaderboard.map((team, index) => (
-                            <div key={team.id} className="grid grid-cols-[60px_1fr_120px] items-center border border-white/5 bg-black/30 px-5 py-4">
-                                <div className="text-purple-400 font-black text-xl">#{index + 1}</div>
-                                <div><div className="font-bold">{team.team_name || `TEAM ${String(team.team_number).padStart(2, '0')}`}</div><div className="text-xs text-white/35 mt-1">TEAM {String(team.team_number).padStart(2, '0')}</div></div>
-                                <div className="text-right"><div className="text-2xl font-black text-purple-300">{team.score || 0}</div><div className="text-xs text-white/30 uppercase">points</div></div>
+                    
+                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 mt-1">
+                        <h2 className="text-2xl font-black tracking-wider">LEADERBOARD</h2>
+                        <div className="flex items-center gap-2 bg-green-950/20 border border-green-500/30 px-3 py-1.5">
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
+                            <span className="text-xs font-bold text-green-400 tracking-[0.2em] uppercase">LIVE • UPDATING</span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        {sortedLeaderboard.map((team, index) => {
+                            const isFirst = index === 0;
+                            const isSecond = index === 1;
+                            const isThird = index === 2;
+                            
+                            let borderClass = 'border-white/5';
+                            let textClass = 'text-purple-400';
+                            let scoreClass = 'text-purple-300 text-2xl';
+                            let bgClass = 'bg-black/30';
+                            
+                            if (isFirst) {
+                                borderClass = 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.1)]';
+                                textClass = 'text-yellow-400';
+                                scoreClass = 'text-yellow-400 text-4xl';
+                                bgClass = 'bg-yellow-950/10';
+                            } else if (isSecond) {
+                                borderClass = 'border-purple-400/40';
+                                textClass = 'text-purple-300';
+                                scoreClass = 'text-purple-300 text-3xl';
+                                bgClass = 'bg-purple-950/20';
+                            } else if (isThird) {
+                                borderClass = 'border-purple-500/30';
+                                textClass = 'text-purple-400';
+                                scoreClass = 'text-purple-400 text-3xl';
+                                bgClass = 'bg-purple-950/10';
+                            }
+
+                            return (
+                                <div key={team.id} className={`grid grid-cols-[70px_1fr_120px] items-center border px-5 py-4 transition-all ${borderClass} ${bgClass}`}>
+                                    <div className={`font-black text-2xl flex items-center gap-2 ${textClass}`}>
+                                        #{index + 1}
+                                        {isFirst && <Trophy size={20} className="text-yellow-500" />}
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-white/40 mb-1 uppercase tracking-[0.2em] font-bold">TEAM {String(team.team_number).padStart(2, '0')}</div>
+                                        <div className={`font-black uppercase tracking-wider ${isFirst ? 'text-xl' : 'text-lg text-white/90'}`}>{team.team_name || `TEAM ${String(team.team_number).padStart(2, '0')}`}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className={`font-black ${scoreClass}`}>{team.score || 0}</div>
+                                        <div className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-bold mt-1">POINTS</div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {sortedLeaderboard.length === 0 && (
+                            <div className="py-16 border border-dashed border-white/10 flex flex-col items-center justify-center bg-black/20">
+                                <Trophy size={48} className="text-white/10 mb-5" />
+                                <div className="text-white/40 font-bold tracking-[0.3em] uppercase">NO TEAM DATA AVAILABLE</div>
                             </div>
-                        ))}
-                        {sortedLeaderboard.length === 0 && <div className="py-10 text-center text-white/30">No teams available yet.</div>}
+                        )}
                     </div>
                 </section>
             </div>
@@ -781,8 +899,8 @@ function JoinedTeamCard({ team }) {
 
                 <div
                     className={`flex items-center gap-2 px-3 py-2 border text-[10px] font-black tracking-widest ${isImposter
-                            ? 'border-red-500/40 bg-red-950/30 text-red-400'
-                            : 'border-green-500/30 bg-green-950/20 text-green-400'
+                        ? 'border-red-500/40 bg-red-950/30 text-red-400'
+                        : 'border-green-500/30 bg-green-950/20 text-green-400'
                         }`}
                 >
                     {isImposter ? (

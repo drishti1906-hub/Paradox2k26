@@ -9,11 +9,23 @@ import AuthModal from './components/AuthModal';
 import RoleCardScreen from './components/RoleCardScreen';
 import MissionBriefScreen from './components/MissionBriefScreen';
 import Dashboard from './components/Dashboard';
+import MissionScreen from "./components/MissionScreen";
+
 
 function App() {
   // The public/player experience is the default. Admin is a separate control surface.
   const [appState, setAppState] = useState('splash');
   const [loggedInTeam, setLoggedInTeam] = useState(null);
+
+  {
+    appState === "mission" && loggedInTeam && (
+      <MissionScreen
+        key="mission"
+        onExit={() => setAppState("dashboard")}
+        timer="40:00"
+      />
+    )
+  }
 
   useEffect(() => {
     const saved = sessionStorage.getItem('paradox_team');

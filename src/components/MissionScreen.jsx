@@ -1,83 +1,96 @@
-import { useState } from 'react';
-import { ArrowLeft, Clock3, Flag, CheckCircle2 } from 'lucide-react';
-import CodeEditor from '../components/CodeEditor';
+import { useEffect, useState } from "react";
+import {
+    ArrowLeft,
+    Clock3,
+    CheckCircle2,
+    XCircle,
+    ChevronRight,
+} from "lucide-react";
 
-const DEFAULT_MISSION = {
-    id: 1,
-    title: 'TWO SUM',
-    caseFile: 'CASE FILE 01',
-    description:
-        'You are given an array of integers nums and an integer target. Return indices of the two numbers such that they add up to target.',
-    difficulty: 'EASY',
-
-    examples: [
-        {
-            input: 'nums = [2,7,11,15], target = 9',
-            output: '[0,1]',
-            explanation:
-                'Because nums[0] + nums[1] == 9, we return [0, 1].',
-        },
-        {
-            input: 'nums = [3,2,4], target = 6',
-            output: '[1,2]',
-            explanation:
-                'Because nums[1] + nums[2] == 6.',
-        },
-    ],
-
-    constraints: [
-        '2 <= nums.length <= 10⁴',
-        '-10⁹ <= nums[i] <= 10⁹',
-        '-10⁹ <= target <= 10⁹',
-    ],
-};
+import CodeEditor from "../components/CodeEditor";
+import { CHALLENGES } from "../data/challenges";
+import { runCode } from "../lib/compiler";
 
 export default function MissionScreen({
     onExit,
-    timer = '00:00',
+    timer = "40:00",
 }) {
-    const [mission] = useState(DEFAULT_MISSION);
+    const [questionIndex, setQuestionIndex] = useState(0);
+
+    const [language, setLanguage] = useState("python");
+
     const [running, setRunning] = useState(false);
-    const [submissionMessage, setSubmissionMessage] = useState('');
 
-    const runCode = async ({ language, code }) => {
-        console.log('RUN REQUEST:', {
-            language,
-            code,
-        });
+    const [result, setResult] = useState(null);
 
+    const [code, setCode] = useState("");
+
+    const mission = CHALLENGES[questionIndex];
+
+    /*
+     * Load starter code whenever question/language changes.
+     */
+    useEffect(() => {
+        setCode(mission.starterCode[language]);
+        setResult(null);
+    }, [questionIndex, language]);
+
+    useEffect(() => {
+        const resetHandler = () => {
+            setCode(mission.starterCode[language]);
+            setResult(null);
+        };
+
+        window.addEventListener(
+            "reset-code",
+            resetHandler
+        );
+
+        return () => {
+            window.removeEventListener(
+                "reset-code",
+                resetHandler
+            );
+        };
+    }, [mission, language]);
+
+    const handleRun = async () => {
         setRunning(true);
-        setSubmissionMessage('');
+        setResult(null);
 
         try {
-            /*
-             * COMPILER CONNECTION WILL BE ADDED NEXT.
-             *
-             * For now we only verify that the editor
-             * is communicating correctly.
-             */
+            const compilerResult = await runCode({
+                language,
+                code,
+                testCases: mission.testCases,
+            });
 
-            await new Promise((resolve) =>
-                setTimeout(resolve, 800)
-            );
-
-            return {
-                output:
-                    `Compiler ready.\n\n` +
-                    `Language: ${language}\n\n` +
-                    `Your code was received successfully.\n\n` +
-                    `Actual execution will be connected next.`,
-            };
-
+            setResult(compilerResult);
+        } catch (error) {
+            setResult({
+                success: false,
+                passedCount: 0,
+                total: mission.testCases.length,
+                results: [
+                    {
+                        testCase: 0,
+                        passed: false,
+                        error:
+                            error?.message ||
+                            "Compiler connection failed.",
+                    },
+                ],
+            });
         } finally {
             setRunning(false);
         }
     };
 
-    const submitMission = () => {
-        setSubmissionMessage(
-            'SUBMISSION RECEIVED — COMPILER CONNECTION COMING NEXT'
-        );
+    const nextQuestion = () => {
+        if (questionIndex < CHALLENGES.length - 1) {
+            setQuestionIndex((previous) => previous + 1);
+            window.scrollTo(0, 0);
+        }
     };
 
     return (
@@ -90,7 +103,7 @@ export default function MissionScreen({
 
                     <button
                         onClick={onExit}
-                        className="flex items-center gap-2 text-white/50 hover:text-white transition"
+                        className="flex items-center gap-2 text-white/50 hover:text-white"
                     >
                         <ArrowLeft size={20} />
                         EXIT MISSION
@@ -131,10 +144,12 @@ export default function MissionScreen({
 
                 <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-                    {/* LEFT — QUESTION */}
+                    {/* ================= QUESTION ================= */}
+
                     <section className="border border-purple-500/30 bg-[#08060D] flex flex-col min-h-0">
 
-                        {/* QUESTION HEADER */}
+                        {/* HEADER */}
+
                         <div className="border-b border-white/10 p-5">
 
                             <div className="text-xs text-purple-400 tracking-[0.3em] font-bold">
@@ -143,7 +158,7 @@ export default function MissionScreen({
 
                             <div className="flex items-center justify-between mt-2">
 
-                                <h1 className="text-3xl md:text-4xl font-black tracking-tight">
+                                <h1 className="text-3xl md:text-4xl font-black">
                                     {mission.title}
                                 </h1>
 
@@ -153,16 +168,26 @@ export default function MissionScreen({
 
                             </div>
 
+                            <div className="mt-3 text-xs text-white/30">
+                                QUESTION {questionIndex + 1} / {CHALLENGES.length}
+                            </div>
+
                         </div>
 
-                        {/* QUESTION CONTENT */}
-                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                        {/* CONTENT */}
+
+                        <div className="flex-1 overflow-y-auto p-6">
 
                             <div className="text-lg text-white/75 leading-8">
                                 {mission.description}
                             </div>
 
+                            <div className="mt-6 text-white/60 leading-7">
+                                {mission.problem}
+                            </div>
+
                             {/* EXAMPLES */}
+
                             <div className="mt-8">
 
                                 <h2 className="text-lg font-black tracking-wider mb-4">
@@ -182,26 +207,22 @@ export default function MissionScreen({
                                                     Example {index + 1}
                                                 </div>
 
-                                                <div className="font-mono text-sm text-white/80 space-y-2">
+                                                <div className="font-mono text-sm">
 
-                                                    <div>
+                                                    <div className="text-white/70 whitespace-pre-wrap">
                                                         <span className="text-white/40">
                                                             Input:
-                                                        </span>{' '}
+                                                        </span>{" "}
                                                         {example.input}
                                                     </div>
 
-                                                    <div>
+                                                    <div className="mt-3 text-white/80 whitespace-pre-wrap">
                                                         <span className="text-white/40">
                                                             Output:
-                                                        </span>{' '}
+                                                        </span>{" "}
                                                         {example.output}
                                                     </div>
 
-                                                </div>
-
-                                                <div className="mt-3 text-white/50 text-sm">
-                                                    {example.explanation}
                                                 </div>
 
                                             </div>
@@ -212,37 +233,123 @@ export default function MissionScreen({
 
                             </div>
 
-                            {/* CONSTRAINTS */}
-                            <div className="mt-8">
+                            {/* TEST CASE STATUS */}
 
-                                <h2 className="text-lg font-black tracking-wider mb-4">
-                                    CONSTRAINTS
-                                </h2>
+                            {result && (
+                                <div className="mt-8">
 
-                                <ul className="space-y-2 text-white/50 font-mono text-sm">
+                                    <div
+                                        className={`p-5 border ${result.success
+                                            ? "border-green-500/50 bg-green-950/20"
+                                            : "border-red-500/50 bg-red-950/20"
+                                            }`}
+                                    >
 
-                                    {mission.constraints.map(
-                                        (constraint, index) => (
-                                            <li key={index}>
-                                                • {constraint}
-                                            </li>
-                                        )
-                                    )}
+                                        <div className="flex items-center gap-3">
 
-                                </ul>
+                                            {result.success ? (
+                                                <CheckCircle2
+                                                    className="text-green-400"
+                                                    size={25}
+                                                />
+                                            ) : (
+                                                <XCircle
+                                                    className="text-red-400"
+                                                    size={25}
+                                                />
+                                            )}
 
-                            </div>
+                                            <div>
+
+                                                <div
+                                                    className={`font-black tracking-widest ${result.success
+                                                        ? "text-green-400"
+                                                        : "text-red-400"
+                                                        }`}
+                                                >
+                                                    {result.success
+                                                        ? "CASE FILE CORRECT"
+                                                        : "CASE FILE FAILED"}
+                                                </div>
+
+                                                <div className="text-sm text-white/50 mt-1">
+                                                    {result.passedCount} /{" "}
+                                                    {result.total} TEST CASES PASSED
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    {/* INDIVIDUAL TEST CASES */}
+
+                                    <div className="mt-4 space-y-2">
+
+                                        {result.results.map(
+                                            (test) => (
+                                                <div
+                                                    key={test.testCase}
+                                                    className={`p-3 border ${test.passed
+                                                        ? "border-green-500/20"
+                                                        : "border-red-500/20"
+                                                        }`}
+                                                >
+
+                                                    <div className="flex justify-between">
+
+                                                        <span className="font-mono text-sm">
+                                                            TEST CASE{" "}
+                                                            {test.testCase}
+                                                        </span>
+
+                                                        <span
+                                                            className={
+                                                                test.passed
+                                                                    ? "text-green-400"
+                                                                    : "text-red-400"
+                                                            }
+                                                        >
+                                                            {test.passed
+                                                                ? "PASSED"
+                                                                : "FAILED"}
+                                                        </span>
+
+                                                    </div>
+
+                                                    {!test.passed &&
+                                                        test.error && (
+                                                            <pre className="mt-2 text-xs text-red-300 whitespace-pre-wrap">
+                                                                {test.error}
+                                                            </pre>
+                                                        )}
+
+                                                </div>
+                                            )
+                                        )}
+
+                                    </div>
+
+                                </div>
+                            )}
 
                         </div>
 
                     </section>
 
-                    {/* RIGHT — CODE */}
+                    {/* ================= CODE ================= */}
+
                     <section className="min-h-0">
 
                         <CodeEditor
-                            onRun={runCode}
+                            language={language}
+                            setLanguage={setLanguage}
+                            code={code}
+                            setCode={setCode}
+                            onRun={handleRun}
                             running={running}
+                            output={result}
                         />
 
                     </section>
@@ -251,13 +358,24 @@ export default function MissionScreen({
 
             </main>
 
-            {/* SUBMISSION MESSAGE */}
-            {submissionMessage && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 border border-green-500/40 bg-green-950/90 px-6 py-4 text-green-300 shadow-xl">
+            {/* NEXT QUESTION */}
 
-                    <CheckCircle2 size={20} />
+            {result?.success && (
+                <div className="fixed bottom-5 right-5">
 
-                    {submissionMessage}
+                    {questionIndex < CHALLENGES.length - 1 ? (
+                        <button
+                            onClick={nextQuestion}
+                            className="flex items-center gap-3 px-7 py-4 bg-purple-600 hover:bg-purple-500 text-white font-black tracking-widest shadow-[0_0_25px_rgba(139,92,246,0.5)]"
+                        >
+                            NEXT QUESTION
+                            <ChevronRight size={20} />
+                        </button>
+                    ) : (
+                        <div className="px-7 py-4 bg-green-600 text-white font-black tracking-widest">
+                            ALL 5 CASE FILES COMPLETE
+                        </div>
+                    )}
 
                 </div>
             )}

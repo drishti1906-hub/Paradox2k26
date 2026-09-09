@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import MissionScreen from './MissionScreen';
+import ChallengePage from './ChallengePage';
 import {
   DashboardNavbar,
   TeamIdentity,
@@ -36,10 +37,15 @@ export default function Dashboard({ team, teamName, onExit }) {
   const [savingScore, setSavingScore] = useState(false);
   const [message, setMessage] = useState('');
   const [missionStarted, setMissionStarted] = useState(false);
+  const [showChallenges, setShowChallenges] = useState(false);
 
   const isImposter = String(teamRecord?.role || team?.role || '').toUpperCase() === 'IMPOSTER';
   const displayTeam = teamRecord?.team_name || `TEAM ${String(teamNumber || '').padStart(2, '0')}`;
   const score = Number(teamRecord?.score || 0);
+
+  const handleEnterMission = () => {
+    setMissionStarted(true);
+  };
 
   const load = async () => {
     try {
@@ -81,6 +87,13 @@ export default function Dashboard({ team, teamName, onExit }) {
       <MissionScreen
         onExit={() => setMissionStarted(false)}
         timer={formatTime(liveSeconds)}
+      />
+    );
+  }
+  if (showChallenges) {
+    return (
+      <ChallengePage
+        onBack={() => setShowChallenges(false)}
       />
     );
   }

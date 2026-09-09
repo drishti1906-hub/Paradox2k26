@@ -112,6 +112,20 @@ export default function AuthModal({ onLogin }) {
 
       console.log('LOGIN SUCCESS:', player);
 
+      // Explicitly mark as joined to trigger realtime Admin Dashboard updates
+      const { error: updateError } = await supabase
+        .from('teams')
+        .update({
+          is_joined: true,
+          is_active: true,
+          joined_at: new Date().toISOString()
+        })
+        .eq('team_number', player.team_number);
+
+      if (updateError) {
+        console.error('Failed to mark team as joined:', updateError);
+      }
+
       // Send the complete player information to App.jsx
       onLogin({
         username: player.username,
