@@ -136,6 +136,9 @@ export default function AuthModal({ onLogin }) {
     } catch (err) {
 
       console.error('Unexpected login error:', err);
+      if (err instanceof Error) {
+        console.error('Error details:', err.message, err.stack);
+      }
 
       setError('CONNECTION ERROR');
       setIsLoggingIn(false);

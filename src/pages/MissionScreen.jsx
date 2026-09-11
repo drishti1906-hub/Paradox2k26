@@ -86,6 +86,7 @@ export default function MissionScreen({
         return () => clearInterval(timer);
     }, [phase]);
 
+
     // -----------------------------------------
     // TIMER EVENTS
     // -----------------------------------------
@@ -93,45 +94,35 @@ export default function MissionScreen({
     useEffect(() => {
         if (timeLeft !== 0) return;
 
-        // =========================================
-        // MISSION 1 ENDED
-        // 30 MINUTES COMPLETED
-        // =========================================
+        // -----------------------------------------
+        // PHASE 1 → ROUND TABLE
+        // -----------------------------------------
+
         if (phase === 1) {
             setPhase(2);
-            setQuestionIndex(5);
-
-            // Round Table = exactly 10 minutes
             setTimeLeft(10 * 60);
-
             setResult(null);
             return;
         }
 
-        // =========================================
-        // ROUND TABLE ENDED
-        // 10 MINUTES COMPLETED
-        // =========================================
+        // -----------------------------------------
+        // ROUND TABLE → PHASE 2
+        // -----------------------------------------
+
         if (phase === 2) {
             setPhase(3);
-
-            // Start Question 6
             setQuestionIndex(5);
-
-            // Mission 2 = exactly 30 minutes
             setTimeLeft(30 * 60);
-
             setResult(null);
             return;
         }
 
-        // =========================================
-        // MISSION 2 ENDED
-        // 30 MINUTES COMPLETED
-        // =========================================
+        // -----------------------------------------
+        // PHASE 2 → FINISHED
+        // -----------------------------------------
+
         if (phase === 3) {
             setPhase(4);
-            setTimeLeft(0);
             return;
         }
 
@@ -194,18 +185,17 @@ export default function MissionScreen({
     // -----------------------------------------
 
     const nextQuestion = () => {
-        // Mission 1: Questions 1-5
         if (phase === 1 && questionIndex < 4) {
             setQuestionIndex((previous) => previous + 1);
             return;
         }
 
-        // Mission 2: Questions 6-10
         if (phase === 3 && questionIndex < 9) {
             setQuestionIndex((previous) => previous + 1);
             return;
         }
     };
+
     // -----------------------------------------
     // TIME FORMAT
     // -----------------------------------------
@@ -276,7 +266,7 @@ export default function MissionScreen({
 
                     <div className="text-xs tracking-widest">
                         {phase === 1 && "MISSION 1 • QUESTIONS 01–05"}
-                        {phase === 2 && "ROUND TABLE • 10 MINUTES"}
+                        {phase === 2 && "ROUND TABLE"}
                         {phase === 3 && "MISSION 2 • QUESTIONS 06–10"}
                         {phase === 4 && "MISSION COMPLETE"}
                     </div>

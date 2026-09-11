@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import MissionScreen from './MissionScreen';
+import MissionScreen from "../pages/MissionScreen";
 import ChallengePage from './ChallengePage';
 import {
   DashboardNavbar,
@@ -28,13 +28,16 @@ const EMPTY_GAME_STATE = {
   admin_message: '',
 };
 
-export default function Dashboard({ team, teamName, onExit }) {
+export default function Dashboard({
+  team,
+  onExit,
+  onEnterMission,
+  phase = "MISSION_1",
+}) {
   const teamNumber = team?.team_number ?? teamName;
   const [gameState, setGameState] = useState(EMPTY_GAME_STATE);
   const [teamRecord, setTeamRecord] = useState(team || null);
   const [loading, setLoading] = useState(true);
-  const [scoreInput, setScoreInput] = useState('');
-  const [savingScore, setSavingScore] = useState(false);
   const [message, setMessage] = useState('');
   const [missionStarted, setMissionStarted] = useState(false);
   const [showChallenges, setShowChallenges] = useState(false);
@@ -47,42 +50,100 @@ export default function Dashboard({ team, teamName, onExit }) {
     setMissionStarted(true);
   };
 
-  const load = async () => {
-    try {
-      const [gameResult, teamResult] = await Promise.all([
-        supabase.from('game_state').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('teams').select('*').eq('team_number', teamNumber).maybeSingle(),
-      ]);
-      if (gameResult.error) throw gameResult.error;
-      if (teamResult.error) throw teamResult.error;
-      setGameState({ ...EMPTY_GAME_STATE, ...(gameResult.data || {}) });
-      if (teamResult.data) setTeamRecord(teamResult.data);
-    } catch (err) {
-      console.error('PLAYER LOAD ERROR:', err);
-      setMessage(err.message || 'Unable to load live game state.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [teamNumber]);
-
   useEffect(() => {
+    let isMounted = true;
+
+    // 1. Subscribe to Realtime immediately so we don't miss anything during the fetch.
     const gameChannel = supabase
       .channel(`player-game-${teamNumber}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'game_state' }, (payload) => {
-        if (payload.new) setGameState((current) => ({ ...current, ...payload.new }));
+        if (payload.new && isMounted) {
+          setGameState((current) => {
+            const currentUpdated = new Date(current.updated_at || 0).getTime();
+            const newUpdated = new Date(payload.new.updated_at || 0).getTime();
+            if (currentUpdated > newUpdated) return current;
+            return { ...current, ...payload.new };
+          });
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams', filter: `team_number=eq.${teamNumber}` }, (payload) => {
-        if (payload.new) setTeamRecord((current) => ({ ...current, ...payload.new }));
+        if (payload.new && isMounted) setTeamRecord((current) => ({ ...current, ...payload.new }));
       })
       .subscribe();
-    return () => { supabase.removeChannel(gameChannel); };
+
+    // 2. Fetch initial state securely
+    const loadInitialState = async () => {
+      try {
+        const [gameResult, teamResult] = await Promise.all([
+          supabase.from('game_state').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+          supabase.from('teams').select('*').eq('team_number', teamNumber).maybeSingle(),
+        ]);
+
+        if (!isMounted) return;
+        if (gameResult.error) throw gameResult.error;
+        if (teamResult.error) throw teamResult.error;
+
+        if (gameResult.data) {
+          setGameState((current) => {
+            const currentUpdated = new Date(current.updated_at || 0).getTime();
+            const fetchUpdated = new Date(gameResult.data.updated_at || 0).getTime();
+            // If realtime already fired a newer update, ignore this fetch data.
+            if (currentUpdated > fetchUpdated) return current;
+            return { ...EMPTY_GAME_STATE, ...gameResult.data };
+          });
+        }
+
+        if (teamResult.data) {
+          setTeamRecord((current) => ({ ...current, ...teamResult.data }));
+        }
+      } catch (err) {
+        console.error('PLAYER LOAD ERROR:', err);
+        if (isMounted) setMessage(err.message || 'Unable to load live game state.');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadInitialState();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(gameChannel);
+    };
   }, [teamNumber]);
+
+  // Enforce global phase logic to override local state
+  useEffect(() => {
+    if (gameState.phase !== 'MISSION') {
+      setMissionStarted(false);
+      setShowChallenges(false);
+    }
+  }, [gameState.phase]);
 
   const liveSeconds = useLiveTimer(gameState);
   const formatTime = (value) => `${Math.floor(value / 60).toString().padStart(2, '0')}:${(value % 60).toString().padStart(2, '0')}`;
-  if (missionStarted) {
+
+  if (gameState.game_status === 'WAITING') {
+    return (
+      <div className="flex flex-col h-screen w-full bg-[#05030A] items-center justify-center text-white p-6 text-center">
+        <h1 className="text-4xl md:text-5xl font-black tracking-widest text-[#8B5CF6] mb-4">WAITING FOR GAME TO START</h1>
+        <p className="text-[#A7A0B8] tracking-widest uppercase">The Admin will initiate the mission shortly.</p>
+        <div className="mt-8 animate-pulse text-[#8B5CF6]/50">...</div>
+      </div>
+    );
+  }
+
+  if (gameState.game_status === 'ENDED') {
+    return (
+      <div className="flex flex-col h-screen w-full bg-[#05030A] items-center justify-center text-white p-6 text-center">
+        <h1 className="text-4xl md:text-5xl font-black tracking-widest text-red-500 mb-4">GAME ENDED</h1>
+        <p className="text-[#A7A0B8] tracking-widest uppercase">Thank you for playing.</p>
+        <div className="text-2xl mt-8 tracking-widest font-bold">YOUR SCORE: <span className="text-[#22C55E]">{score}</span></div>
+      </div>
+    );
+  }
+
+  if (missionStarted && gameState.phase === 'MISSION') {
     return (
       <MissionScreen
         onExit={() => setMissionStarted(false)}
@@ -90,7 +151,8 @@ export default function Dashboard({ team, teamName, onExit }) {
       />
     );
   }
-  if (showChallenges) {
+
+  if (showChallenges && gameState.phase === 'MISSION') {
     return (
       <ChallengePage
         onBack={() => setShowChallenges(false)}
@@ -98,33 +160,7 @@ export default function Dashboard({ team, teamName, onExit }) {
     );
   }
 
-  const submitScore = async () => {
-    const value = Number(scoreInput);
-    if (!Number.isFinite(value) || value < 0) {
-      setMessage('ENTER A VALID SCORE.');
-      return;
-    }
-    setSavingScore(true);
-    setMessage('');
-    try {
-      // The normal event setup should expose this update through RLS.
-      const { data, error } = await supabase
-        .from('teams')
-        .update({ score: Math.round(value) })
-        .eq('team_number', teamNumber)
-        .select('*')
-        .single();
-      if (error) throw error;
-      setTeamRecord(data);
-      setScoreInput('');
-      setMessage('SCORE SAVED');
-    } catch (err) {
-      console.error('SCORE UPDATE ERROR:', err);
-      setMessage(err.message || 'SCORE COULD NOT BE SAVED');
-    } finally {
-      setSavingScore(false);
-    }
-  };
+
 
   return (
     <div className="flex flex-col h-screen w-full bg-[#05030A] overflow-hidden font-sans selection:bg-[#7C3AED] selection:text-white">
@@ -149,24 +185,14 @@ export default function Dashboard({ team, teamName, onExit }) {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[400px]">
               <div className="lg:col-span-6"><MainMissionPanel
-                onEnterMission={() => setMissionStarted(true)}
+                onEnterMission={onEnterMission}
+                phase="MISSION_1"
               /></div>
               <div className="lg:col-span-3"><RoundTablePanel open={gameState.round_table_open} /></div>
               <div className="lg:col-span-3"><CrewStatus currentTeam={displayTeam} /></div>
             </div>
 
-            <section className="border border-[#7C3AED]/80 bg-[#160A27]/70 p-5 shadow-[0_0_20px_rgba(124,58,237,0.2)]">
-              <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-                <div>
-                  <div className="text-xs font-bold text-[#C084FC] tracking-[0.25em] uppercase">TEAM SCORE</div>
-                  <div className="text-white/40 text-xs mt-1 uppercase tracking-widest">Submit your team's current score</div>
-                </div>
-                <div className="flex gap-3">
-                  <input type="number" min="0" value={scoreInput} onChange={(e) => setScoreInput(e.target.value)} placeholder={String(score)} className="w-32 bg-black/50 border border-white/10 px-4 py-3 text-white outline-none focus:border-purple-500" />
-                  <button onClick={submitScore} disabled={savingScore} className="px-6 py-3 bg-purple-700 hover:bg-purple-600 font-black uppercase tracking-wider disabled:opacity-50">{savingScore ? 'SAVING...' : 'SAVE SCORE'}</button>
-                </div>
-              </div>
-            </section>
+
           </div>
         </main>
         <BottomSystemBar />

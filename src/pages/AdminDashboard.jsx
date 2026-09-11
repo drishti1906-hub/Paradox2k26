@@ -154,9 +154,13 @@ export default function AdminDashboard({ onExit }) {
 
         if (fetchError) throw fetchError;
 
-        const next = { ...EMPTY_GAME_STATE, ...(data || {}) };
-        setGameState(next);
-        setAdminMessage(next.admin_message || '');
+        setGameState(current => {
+            const currentUpdated = new Date(current.updated_at || 0).getTime();
+            const fetchUpdated = new Date(data?.updated_at || 0).getTime();
+            if (currentUpdated > fetchUpdated) return current;
+            return { ...EMPTY_GAME_STATE, ...(data || {}) };
+        });
+        setAdminMessage(data?.admin_message || '');
     }, []);
 
     const loadDashboard = useCallback(async () => {
@@ -217,10 +221,12 @@ export default function AdminDashboard({ onExit }) {
                 },
                 (payload) => {
                     if (payload.new) {
-                        setGameState((current) => ({
-                            ...current,
-                            ...payload.new,
-                        }));
+                        setGameState((current) => {
+                            const currentUpdated = new Date(current.updated_at || 0).getTime();
+                            const newUpdated = new Date(payload.new.updated_at || 0).getTime();
+                            if (currentUpdated > newUpdated) return current;
+                            return { ...current, ...payload.new };
+                        });
                     }
                 }
             )
@@ -264,6 +270,7 @@ export default function AdminDashboard({ onExit }) {
                 p_votes_revealed: false,
                 p_game_started_at: gameState.game_started_at || new Date().toISOString(),
             });
+            await callAdminRpc('admin_reset_timer');
             showSuccess('GAME STARTED');
         } catch { }
     };
