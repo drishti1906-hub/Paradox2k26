@@ -294,7 +294,10 @@ export default function MissionScreen({
             {/* ROUND TABLE */}
 
             {isRoundTable && (
-                <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center p-8">
+                <div 
+                    className="min-h-[calc(100vh-7rem)] flex items-center justify-center p-8 bg-cover bg-center"
+                    style={{ backgroundImage: "url('/splash-bg.jpg')" }}
+                >
 
                     <div className="w-full max-w-3xl border-2 border-purple-500 bg-[#08050E] p-12 text-center shadow-[0_0_50px_rgba(139,92,246,0.25)]">
 
@@ -334,7 +337,10 @@ export default function MissionScreen({
             {/* FINISHED */}
 
             {isFinished && (
-                <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center">
+                <div 
+                    className="min-h-[calc(100vh-7rem)] flex items-center justify-center p-8 bg-cover bg-center"
+                    style={{ backgroundImage: "url('/splash-bg.jpg')" }}
+                >
 
                     <div className="border-2 border-purple-500 bg-[#08050E] p-12 text-center">
 

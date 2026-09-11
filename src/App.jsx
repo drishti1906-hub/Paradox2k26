@@ -132,17 +132,18 @@ function App() {
         )}
       </AnimatePresence>
 
-      {appState !== 'admin' && (
-        <button
-          onClick={() => setAppState('admin')}
-          className="fixed bottom-4 right-4 z-[9999] bg-red-600 text-white px-4 py-2 rounded font-bold tracking-wider"
-        >
-          ADMIN
-        </button>
-      )}
+
 
       {/* Global Background Audio */}
-      <audio src="/audio/paradox%20audio.mpeg" autoPlay loop />
+      <audio 
+        src="/audio/paradox%20audio.mpeg" 
+        autoPlay 
+        loop 
+        onEnded={(e) => {
+          e.target.currentTime = 0;
+          e.target.play().catch(err => console.log("Audio play failed:", err));
+        }}
+      />
 
     </div>
   );

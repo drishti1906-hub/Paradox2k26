@@ -16,7 +16,7 @@ import { supabase } from '../lib/supabase';
 const EMPTY_GAME_STATE = {
   is_live: false,
   timer_running: false,
-  timer_remaining: 0,
+  timer_remaining: 4200,
   timer_started_at: null,
   current_round: 1,
   phase: 'LOBBY',

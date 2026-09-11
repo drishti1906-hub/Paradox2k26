@@ -261,7 +261,7 @@ export default function AdminDashboard({ onExit }) {
             await callAdminRpc('admin_update_game_state', {
                 p_is_live: true,
                 p_timer_running: false,
-                p_timer_remaining: 1800,
+                p_timer_remaining: 4200,
                 p_current_round: gameState.current_round || 1,
                 p_phase: 'MISSION',
                 p_game_status: 'RUNNING',

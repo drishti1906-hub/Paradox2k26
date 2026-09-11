@@ -1457,14 +1457,14 @@ int main() {
         examples: [
             {
                 input: "5\nadmin123\nparadox2026\nhello\nsecurity\ncode",
-                output: "3 10",
+                output: "3 11",
             },
         ],
 
         testCases: [
             {
                 input: "5\nadmin123\nparadox2026\nhello\nsecurity\ncode",
-                expected: "3 10",
+                expected: "3 11",
             },
             {
                 input: "4\npassword\n12345678\nhello\nabcdefgh",

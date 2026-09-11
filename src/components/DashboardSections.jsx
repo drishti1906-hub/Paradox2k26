@@ -87,8 +87,8 @@ export const TeamIdentity = ({ teamName, isImposter }) => (
 );
 
 export const MissionHUD = ({
-  timer = "30:00",
-  timeInSeconds = 1800,
+  timer = "70:00",
+  timeInSeconds = 4200,
   score = "0",
 }) => {
   const isWarning = timeInSeconds <= 180 && timeInSeconds > 30;
